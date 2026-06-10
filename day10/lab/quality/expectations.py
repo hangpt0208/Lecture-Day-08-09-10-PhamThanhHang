@@ -10,6 +10,13 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+EXPECTED_DOC_IDS = {
+    "access_control_sop",
+    "hr_leave_policy",
+    "it_helpdesk_faq",
+    "policy_refund_v4",
+    "sla_p1_2026",
+}
 
 @dataclass
 class ExpectationResult:
@@ -109,6 +116,37 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             ok6,
             "halt",
             f"violations={len(bad_hr_annual)}",
+        )
+    )
+
+    present_doc_ids = {r.get("doc_id") for r in cleaned_rows}
+
+    # E7: Đảm bảo rằng tất cả các nguồn tài liệu mà bộ đánh giá (grading) cần sử dụng vẫn còn tồn tại sau bước cleaning.
+    missing = EXPECTED_DOC_IDS - present_doc_ids
+
+    results.append(
+        ExpectationResult(
+            "all_grading_sources_present",
+            len(missing) == 0,
+            "halt",
+            f"missing={sorted(missing)}",
+        )
+    )
+
+    # E8: Đảm bảo dữ liệu sạch không chứa nhiều chunk giống hệt nhau.
+    pairs = [
+        (r.get("doc_id"), r.get("chunk_text"))
+        for r in cleaned_rows
+    ]
+
+    dup_count = len(pairs) - len(set(pairs))
+
+    results.append(
+        ExpectationResult(
+            "no_duplicate_doc_text_pairs",
+            dup_count == 0,
+            "warn", #để warn vì duplicate làm giảm chất lượng nhưng chưa chắc làm pipeline unusable
+            f"duplicates={dup_count}",
         )
     )
 

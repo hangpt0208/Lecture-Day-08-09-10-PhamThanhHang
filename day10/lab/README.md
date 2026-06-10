@@ -44,17 +44,49 @@ python etl_pipeline.py run
 ```
 
 Pipeline sẽ **HALT** do expectation phát hiện dữ liệu chưa sạch. Đọc kỹ log để hiểu lý do.
+<br>
+Kết quả:
+- `run_id=2026-06-10T07-10Z raw_records=247 cleaned_records=40`: Có 247 bản ghi đầu vào. Sau khi làm sạch dữ liệu, chỉ còn 40 bản ghi hợp lệ. <br> 
+- `quarantine_records=207` : Có 207 bản ghi bị đưa vào vùng "quarantine" (cách ly) vì không đạt yêu cầu nào đó <br>
+- `cleaned_csv=artifacts\cleaned\cleaned_2026-06-10T07-10Z.csv`, `quarantine_csv=artifacts\quarantine\quarantine_2026-06-10T07-10Z.csv`: File chứa dữ liệu sạch và dữ liệu bị loại.
+- `expectation[min_one_row] OK (halt) :: cleaned_rows=40`: Rule: Sau khi làm sạch phải còn ít nhất 1 dòng => đạt
+- `expectation[no_empty_doc_id] OK (halt) :: empty_doc_id_count=0` : Rule: Không được có doc_id rỗng. => đạt
+- `expectation[refund_no_stale_14d_window] OK (halt) :: violations=0 : Rule: Policy refund không được chứa cửa sổ sai 14 ngày (sau khi đã fix) => đạt
+- `expectation[chunk_min_length_8] OK (warn)` :: `short_chunks=0` : Rule: chunk_text đủ dài => đạt
+- `expectation[effective_date_iso_yyyy_mm_dd] OK (halt)` :: `non_iso_rows=0` : Rule: effective_date đúng định dạng ISO sau clean (phát hiện parser lỏng) => đạt
+- `expectation[hr_leave_no_stale_10d_annual] FAIL (halt)` :: `violations=2` : Rule: không còn marker phép năm cũ 10 ngày trên doc HR (conflict version sau clean) => không đạt
 
 **Bước 2 — Phân tích dữ liệu raw:**
 
 - Có bao nhiêu `doc_id` **unique** trong `data/raw/policy_export_dirty.csv`?
 - `ALLOWED_DOC_IDS` trong `transform/cleaning_rules.py` chứa những doc_id nào?
 - Có nguồn dữ liệu hợp lệ nào trong CSV bị pipeline **bỏ qua** (quarantine nhầm) không?
+<br><br>
+***Dùng file pileline_buoc2.py để thực hiện***
+
+- Phân tích `data/raw/policy_export_dirty.csv` để thống kê các doc_id xuất hiện trong dữ liệu.
+- Đối chiếu với ALLOWED_DOC_IDS trong `transform/cleaning_rules.py`.
+- Phát hiện một nguồn hợp lệ là `access_control_sop` xuất hiện trong bộ đánh giá nhưng chưa được đưa vào allowlist của pipeline.
+- Kết luận: pipeline đang có nguy cơ quarantine nhầm dữ liệu thuộc `access_control_sop`.
 
 **Bước 3 — Đối chiếu với câu hỏi đánh giá:**
 
 - Mở `data/grading_questions.json`, kiểm tra trường `expect_top1_doc_id` — cần những nguồn nào?
 - So sánh với những gì pipeline hiện tại cho phép — thiếu nguồn nào?
+
+<br><br>
+***Dùng file pineline_buoc3.py để phân tích***
+
+- Phân tích `data/grading_questions.json` và trích xuất toàn bộ giá trị `expect_top1_doc_id`.
+- Các nguồn được yêu cầu bởi bộ grading:
+    - `access_control_sop`
+    - `hr_leave_policy`
+    - `it_helpdesk_faq`
+    - `policy_refund_v4`
+    - `sla_p1_2026`
+- So sánh với `ALLOWED_DOC_IDS` trong `transform/cleaning_rules.py` của pipeline.
+- Phát hiện thiếu `access_control_sop` trong allowlist.
+- Cập nhật allowlist để đảm bảo tất cả nguồn dữ liệu phục vụ đánh giá đều được giữ lại sau bước cleaning.
 
 **Bước 4 — Sửa pipeline:**
 

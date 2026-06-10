@@ -88,7 +88,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         log("PIPELINE_HALT: expectation suite failed (halt).")
         return 2
     if halt and args.skip_validate:
-        log("WARN: expectation failed but --skip-validate → tiếp tục embed (chỉ dùng cho demo Sprint 3).")
+        log("WARN: expectation failed but --skip-validate -> tiep tuc embed (chi dung cho demo Sprint 3).")
 
     # Embed
     embed_ok = cmd_embed_internal(
@@ -162,7 +162,18 @@ def cmd_embed_internal(cleaned_csv: Path, *, run_id: str, log) -> bool:
             log(f"embed_prune_removed={len(drop)}")
     except Exception as e:
         log(f"WARN: embed prune skip: {e}")
-    documents = [r["chunk_text"] for r in rows]
+    CONTEXT_MAP = {
+        "policy_refund_v4": "Chính sách hoàn tiền (policy refund v4):",
+        "sla_p1_2026": "Cam kết chất lượng dịch vụ SLA P1 ticket P1 (sla p1 2026):",
+        "it_helpdesk_faq": "Câu hỏi thường gặp IT Helpdesk VPN mật khẩu (it helpdesk faq):",
+        "hr_leave_policy": "Chính sách nghỉ phép nhân viên HR (hr leave policy):",
+        "access_control_sop": "Quy trình cấp quyền truy cập Access Control Admin CISO (access control sop):"
+    }
+    documents = []
+    for r in rows:
+        doc_id = r.get("doc_id", "")
+        prefix = CONTEXT_MAP.get(doc_id, f"[{doc_id}]:")
+        documents.append(f"{prefix} {r['chunk_text']}")
     metadatas = [
         {
             "doc_id": r.get("doc_id", ""),

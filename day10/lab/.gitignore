@@ -5,7 +5,17 @@ __pycache__/
 *.pyc
 .DS_Store
 chroma_db/
+chroma_db_temp/
 .pytest_cache/
 *.log
 
+# Ignore all artifacts by default
 artifacts/*
+# Except the mandatory files for grading submission
+!artifacts/**/.gitkeep
+!artifacts/eval/grading_run.jsonl
+!artifacts/eval/after_fix_eval.csv
+!artifacts/eval/after_inject_bad.csv
+!artifacts/manifests/*.json
+!artifacts/quarantine/*.csv
+!artifacts/cleaned/*.csv

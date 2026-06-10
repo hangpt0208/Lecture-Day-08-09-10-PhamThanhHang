@@ -4,14 +4,15 @@ Cleaning rules — raw export → cleaned rows + quarantine.
 Baseline gồm các failure mode mở rộng (allowlist doc_id, parse ngày, HR stale version).
 Sinh viên thêm ≥3 rule mới: mỗi rule phải ghi `metric_impact` (xem README — chống trivial).
 """
-
 from __future__ import annotations
+
 
 import csv
 import hashlib
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from datetime import date
 
 # Khớp export hợp lệ trong lab (mở rộng khi nhóm thêm doc mới — phải đồng bộ contract).
 ALLOWED_DOC_IDS = frozenset(
@@ -20,6 +21,7 @@ ALLOWED_DOC_IDS = frozenset(
         "sla_p1_2026",
         "it_helpdesk_faq",
         "hr_leave_policy",
+        "access_control_sop", #Đây là nguồn bị thiếu
     }
 )
 
@@ -114,7 +116,63 @@ def clean_rows(
         if not text:
             quarantine.append({**raw, "reason": "missing_chunk_text"})
             continue
+        
+        # Rule: quarantine HR policy cũ theo nội dung
+        if (
+            doc_id == "hr_leave_policy"
+            and "10 ngày phép năm" in text
+        ):
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": "stale_hr_policy_content",
+                    "metric_impact": "remove_outdated_hr_policy"
+                }
+            )
+            continue
+        # New rule 1 — chunk quá ngắn (nhỏ hơn 15 ký tự)
+        if len(text.strip()) < 15:
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": "chunk_text_too_short",
+                    "metric_impact": "reduce_low_information_chunks"
+                }
+            )
+            continue
 
+        # New rule 2 — exported_at bắt buộc 
+        # (Vì không có thời gian export thì không xác định được dữ liệu mới hay cũ.)
+        if not exported_at:
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": "missing_exported_at",
+                    "metric_impact": "ensure_data_lineage"
+                }
+            )
+            continue
+        # New rule 3 — effective_date không được ở tương lai
+        if eff_norm > date.today().isoformat():
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": "future_effective_date",
+                    "metric_impact": "prevent_future_policy_leakage"
+                }
+            )
+            continue
+        # New rule 4 — effective_date không được ở quá khứ
+        if doc_id != "sla_p1_2026":
+            if eff_norm < "2026-01-01":
+                quarantine.append(
+                    {
+                        **raw,
+                        "reason": "stale_policy_version",
+                        "metric_impact": "remove_outdated_policies"
+                    }
+                )
+                continue
         key = _norm_text(text)
         if key in seen_text:
             quarantine.append({**raw, "reason": "duplicate_chunk_text"})
